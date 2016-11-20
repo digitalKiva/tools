@@ -7,7 +7,7 @@ import urllib2
 import logging, logging.handlers
 from optparse import OptionParser
 
-LIBDIR = ['/home/mythtv/recordings/episodes', '/home/mythtv/recordings/movies']
+LIBDIR = ['/home/mythtv/recordings/episodes', '/home/mythtv/recordings/episodes_misc', '/home/mythtv/recordings/movies', '/home/mythtv/recordings/movies_misc']
 LOGFILE = '/home/mythtv/mythsyncdeletes.log'
 MAXLOGSIZE = 5 * 1024 * 1024
 MAXLOGS = 1
