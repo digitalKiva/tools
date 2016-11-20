@@ -53,6 +53,7 @@ class Recording(object):
 		self.filename = self.recordingXML.find('Recording/FileName').text
 		self.recgroup = self.recordingXML.find('Recording/RecGroup').text
 		self.recordid = self.recordingXML.find('Recording/RecordId').text
+		self.status = self.recordingXML.find('Recording/Status').text
 		self.title = unicode(self.recordingXML.find('Title').text)
 		self.subtitle = unicode(self.recordingXML.find('SubTitle').text)
 		self.season = unicode(self.recordingXML.find('Season').text)
@@ -102,6 +103,9 @@ class Recording(object):
 		if self.cattype == 'movie' or (self.cattype == 'None' and self.programid[:2] == 'MV'):
 			res = True
 		return res
+
+	def is_recording(self):
+		return self.status == 'Recording'
 
 	def safe_title(self):
 		return re.sub('[\[\]/\\;><&*:%=+@!#^()|?\'"]', '', self.title)
@@ -175,6 +179,11 @@ def main():
 		#rec = recording(mrec)
 		#recordings.append(rec)
 
+		' skip items that are currently recording '
+		if mythtv_rec.is_recording():
+			logging.debug(" - currently recording, skip")
+			continue
+
 		' skip items already set to autoexpire '
 		expired = False
 		for expired_entry in expiring_list.iter('Program'):
@@ -195,18 +204,6 @@ def main():
 				else:
 					mythtv_rec.lib_listing = l
 
-		' figure out if the recording is active '
-#		for recorder in recorderList:
-#			arec = be.getCurrentRecording(recorder)
-#			if (arec['title'] is not None) and (arec['chanid'] is not 0) and \
-#			   (arec == rec.program):
-#				logging.debug(" - currently recording, skip")
-#				activeRecordings.append(rec)
-#				rec.state = RecordingState.Recording
-#				break
-#		if (rec.state != RecordingState.Recorded):
-#			continue
-
 		' figuire if the recording is part of an active job '
 #		jobs = db.searchJobs() #need to generate jobs on each loop
 #		for job in jobs:
@@ -223,7 +220,7 @@ def main():
 
 		' potentially add to auto-expire list, and set orphaned recordings to auto-expire '
 		#if (rec.lib_listing == None) and (rec.state == RecordingState.Recorded):
-        if (mythtv_rec.lib_listing == None):
+		if (mythtv_rec.lib_listing == None):
 			logging.debug(" - no link, delete")
 			newExpireList.append(mythtv_rec)
 			# rec.mythrec.delete(force=True, rerecord=False)
