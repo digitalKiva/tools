@@ -103,7 +103,7 @@ class Recording(object):
 # Looks up the entire mythtv recording list
 def __get_recording_list(base_url):
 	url = base_url + '/Dvr/GetRecordedList'
-	print " - Getting MythTV recording list: " + url
+	logging.debug(" - Getting MythTV recording list: " + url)
 	treeroot = ET.parse(urllib2.urlopen(url)).getroot()
 	#print __print_pretty_xml(treeroot)
 	return treeroot
@@ -112,7 +112,7 @@ def __get_recording_list(base_url):
 # Looks up the entire mythtv recording list
 def __get_expiring_list(base_url):
 	url = base_url + '/Dvr/GetExpiringList'
-	print " - Getting MythTV expiring list: " + url
+	logging.debug(" - Getting MythTV expiring list: " + url)
 	treeroot = ET.parse(urllib2.urlopen(url)).getroot()
 	#print __print_pretty_xml(treeroot)
 	return treeroot
@@ -128,12 +128,13 @@ def __delete_recording(base_url, mythtv_rec):
 def main():
 	' setup logger, all to stdout and INFO and higher to LOGFILE '
 	logging.basicConfig(format='%(message)s',
-				level=logging.NOTSET)
+				level=logging.DEBUG)
 	loggingfile = logging.handlers.RotatingFileHandler(LOGFILE, maxBytes=(MAXLOGSIZE), backupCount=MAXLOGS)
 	loggingfile.setLevel(logging.INFO)
 	formatter = logging.Formatter('%(asctime)s: %(message)s', datefmt='%m-%d %H:%M')
 	loggingfile.setFormatter(formatter)
 	logging.getLogger('').addHandler(loggingfile)
+	logging.getLogger().addHandler(logging.StreamHandler(sys.stdout))
 
 	logging.info(datetime.datetime.now())
 
@@ -158,8 +159,8 @@ def main():
 	for mythtv_entry in recording_list.iter('Program'):
 		recording_count = recording_count + 1
 		mythtv_rec = Recording(mythtv_entry)
-		#logging.debug()
-		print "[%s][%s]" % (mythtv_rec.title, mythtv_rec.filename)
+
+		logging.debug("[%s][%s]" % (mythtv_rec.title, mythtv_rec.filename))
 
 		' skip liveTV items '
 		if mythtv_rec.is_livetv():
