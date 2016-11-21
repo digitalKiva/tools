@@ -5,37 +5,14 @@ import sys, os, errno
 import xml.etree.cElementTree as ET
 import urllib2
 import logging, logging.handlers
+import requests
+import datetime
 from optparse import OptionParser
 
 LIBDIR = ['/home/mythtv/recordings/episodes', '/home/mythtv/recordings/episodes_misc', '/home/mythtv/recordings/movies', '/home/mythtv/recordings/movies_misc']
 LOGFILE = '/home/mythtv/mythsyncdeletes.log'
 MAXLOGSIZE = 5 * 1024 * 1024
 MAXLOGS = 1
-
-
-class RecordingState:
-	Recorded, Recording, BusyJob, Autoexpire = range(4)
-
-class recording:
-	def __init__(self, mythrec):
-		self.mythrec = mythrec
-		self.metadata = mythrec.exportMetadata()
-		self.program = mythrec.getProgram()
-		self.lib_listing = None
-		self.state = RecordingState.Recorded
-
-	def dump(self):
-		logging.debug("%s: [%s][link: %s]" % (self.metadata.filename, self.state, self.lib_listing))
-		logging.debug(self.metadata)
-		logging.debug(self.program)
-		if self.lib_listing:
-			self.lib_listing.dump()
-
-	def match(self, filename):
-		if (os.path.split(self.metadata.filename)[1] == os.path.split(filename)[1]):
-			return True
-		else:
-			return False
 
 class lib_listing:
 	def __init__(self, listing):
@@ -52,7 +29,7 @@ class Recording(object):
 		self.recordingXML = recordingXML
 		self.filename = self.recordingXML.find('Recording/FileName').text
 		self.recgroup = self.recordingXML.find('Recording/RecGroup').text
-		self.recordid = self.recordingXML.find('Recording/RecordId').text
+		self.recordedid = self.recordingXML.find('Recording/RecordedId').text
 		self.status = self.recordingXML.find('Recording/Status').text
 		self.title = unicode(self.recordingXML.find('Title').text)
 		self.subtitle = unicode(self.recordingXML.find('SubTitle').text)
@@ -107,6 +84,12 @@ class Recording(object):
 	def is_recording(self):
 		return self.status == 'Recording'
 
+	def is_livetv(self):
+		return self.recgroup == 'LiveTV'
+
+	def is_deleted(self):
+		return self.recgroup == 'Deleted'
+
 	def safe_title(self):
 		return re.sub('[\[\]/\\;><&*:%=+@!#^()|?\'"]', '', self.title)
 
@@ -134,6 +117,14 @@ def __get_expiring_list(base_url):
 	#print __print_pretty_xml(treeroot)
 	return treeroot
 
+def __delete_recording(base_url, mythtv_rec):
+	url = base_url + '/Dvr/DeleteRecording'
+	logging.debug(" - Deleting Recording [%s]: %s (%s) [%s]" % (mythtv_rec.recordedid, mythtv_rec.title, mythtv_rec.subtitle, mythtv_rec.filename))
+	r = requests.post(url, data={'RecordedId': mythtv_rec.recordedid})
+	if r.status_code != 200:
+		logging.debug(" - Failed to delete recording")
+	return
+
 def main():
 	' setup logger, all to stdout and INFO and higher to LOGFILE '
 	logging.basicConfig(format='%(message)s',
@@ -144,9 +135,7 @@ def main():
 	loggingfile.setFormatter(formatter)
 	logging.getLogger('').addHandler(loggingfile)
 
-	' connect to mythtv database '
-#	db = MythDB()
-#	be = MythBE(db=db)
+	logging.info(datetime.datetime.now())
 
 	' loop all files in lib_dir that are symlinks and create listing '
 	listings = []
@@ -161,27 +150,31 @@ def main():
 	mythtv_url = "http://192.168.2.102:6544"
 
 	' get list of all recordings from MythDB, link with library, figure out their status '
-	#recordings = []
 	activeRecordings = []
-	activeJobs = []
 	newExpireList = []
 	recording_list = __get_recording_list(mythtv_url)
 	expiring_list = __get_expiring_list(mythtv_url)
-	#mythrecordings = db.searchRecorded()
-	#recorderList = be.getRecorderList()
-	#for mrec in mythrecordings:
 	recording_count = 0
 	for mythtv_entry in recording_list.iter('Program'):
 		recording_count = recording_count + 1
 		mythtv_rec = Recording(mythtv_entry)
 		#logging.debug()
 		print "[%s][%s]" % (mythtv_rec.title, mythtv_rec.filename)
-		#rec = recording(mrec)
-		#recordings.append(rec)
+
+		' skip liveTV items '
+		if mythtv_rec.is_livetv():
+			logging.debug(" - liveTV, skip")
+			continue
 
 		' skip items that are currently recording '
 		if mythtv_rec.is_recording():
+			activeRecordings.append(mythtv_rec)
 			logging.debug(" - currently recording, skip")
+			continue
+
+		' skip items that are already deleted '
+		if mythtv_rec.is_deleted():
+			logging.debug(" - already deleted, skip")
 			continue
 
 		' skip items already set to autoexpire '
@@ -189,7 +182,6 @@ def main():
 		for expired_entry in expiring_list.iter('Program'):
 			expired_rec = Recording(expired_entry)
 			if (mythtv_rec.filename == expired_rec.filename):
-				print " - [%s] in expire list" % expired_rec.filename
 				expired = True
 				break
 		if expired:
@@ -204,45 +196,25 @@ def main():
 				else:
 					mythtv_rec.lib_listing = l
 
-		' figuire if the recording is part of an active job '
-#		jobs = db.searchJobs() #need to generate jobs on each loop
-#		for job in jobs:
-#			if job.status in [Job.ABORTING, Job.ERRORING, Job.PAUSED, Job.PENDING, \
-#					  Job.QUEUED, Job.RETRY, Job.RUNNING, Job.STARTING, Job.STOPPING]:
-#				jobrec = Recorded((job.chanid, job.starttime), db=db)
-#				if rec.mythrec == jobrec:
-#					logging.debug(" - currently part of a job, skip")
-#					activeJobs.append(rec)
-#					rec.state = RecordingState.BusyJob
-#					break
-#		if (rec.state != RecordingState.Recorded):
-#			continue
-
 		' potentially add to auto-expire list, and set orphaned recordings to auto-expire '
-		#if (rec.lib_listing == None) and (rec.state == RecordingState.Recorded):
 		if (mythtv_rec.lib_listing == None):
 			logging.debug(" - no link, delete")
 			newExpireList.append(mythtv_rec)
-			# rec.mythrec.delete(force=True, rerecord=False)
-			#rec.mythrec.autoexpire = 1
-			#rec.mythrec.update()
+			__delete_recording(mythtv_url, mythtv_rec)
 
 	' log summary '
 	logging.info("")
 	logging.info("** Summary **")
 	logging.info(" [MythDB Recordings][%s]" % recording_count)
-	#logging.info("  - active recordings: %s" % len(activeRecordings))
-	#for arec in activeRecordings:
-	#	logging.info("   - %s [%s]" % (arec.program, arec.metadata.filename))
-	#logging.info("  - in progress jobs: %s" % len(activeJobs))
-	#for ajobs in activeJobs:
-	#	logging.info("   - %s [%s]" % (ajobs.program, ajobs.metadata.filename))
+	logging.info("  - active recordings: %s" % len(activeRecordings))
+	for arec in activeRecordings:
+		logging.info("   - %s (%s) [%s]" % (arec.title, arec.subtitle, arec.filename))
 
 	logging.info("")
 	logging.info(" [Mythical Links][%s]" % len(listings))
 	logging.info("  - new auto-expire items: %s" % len(newExpireList))
 	for d in newExpireList:
-		logging.info( "   - %s [%s]" % (d.title, d.filename))
+		logging.info( "   - %s (%s) [%s]" % (d.title, d.subtitle, d.filename))
 
 if __name__ == '__main__':
 	main()
