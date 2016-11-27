@@ -291,12 +291,18 @@ def __file_extension(file):
 		return ""
 
 ##
-# Returns movie / episode specific path based on recording type
+# Returns movie / episode path attached to base_path
 # <pool_dir>/movies
 # <pool_dir>/episodes
+def __kodi_category_path(base_path, recording):
+	return os.path.join(base_path, 'movies' if recording.is_movie() else 'episodes')
+
+##
+# Returns movie / episode specific path based on recording type
+# <pool_dir>/movies/<movie>
+# <pool_dir>/episodes/<show>
 def __kodi_show_path(base_path, recording):
-	link_p1 = os.path.join('movies' if recording.is_movie() else 'episodes', recording.safe_title())
-	return os.path.join(base_path, link_p1)
+	return os.path.join(__kodi_category_path(base_path, recording), recording.safe_title())
 
 ##
 # Returns a full kodi compatible link path for the mythtv_recording
@@ -451,6 +457,21 @@ def __process_recording(pool_dir, new_rec, mythtv_rec):
 		__update_special_episode(os.path.dirname(link), mythtv_rec)
 		# print "link (updated): " + link
 
+	# ensure proper permissions
+	print " - Validating permissions: " + __kodi_category_path(pool_dir, mythtv_rec)
+	print " - Validating permissions: " + __kodi_show_path(pool_dir, mythtv_rec)
+	os.chmod(__kodi_category_path(pool_dir, mythtv_rec), 0775)
+	os.chmod(__kodi_show_path(pool_dir, mythtv_rec), 0775)
+	for root, dirs, files in os.walk(__kodi_show_path(pool_dir, mythtv_rec)):
+		for name in files:
+			# print(os.path.join(root, name))
+			os.chmod(os.path.join(root, name), 0775)
+		for name in dirs:
+			# print(os.path.join(root, name))
+			os.chmod(os.path.join(root, name), 0775)
+
+	return
+
 ##
 # Takes as input either a file or directory.  If it is a file then add the single file
 # otherwise if it is a directory scan the directory for all video files
@@ -498,6 +519,7 @@ def scan_recording(mythtv_url, new_files):
 			# (example: http://www.thetvdb.com/api/A3F61578CF5DDBF3/series/276812/all/en.zip)
 		# tmdb_key = "8c65f4f3b0d3c59203ca6b62039426b1"
 		# for wall-e: https://api.themoviedb.org/3/movie/10681?api_key=8c65f4f3b0d3c59203ca6b62039426b1
+	return
 
 def main():
 	global __tvdbclient__
