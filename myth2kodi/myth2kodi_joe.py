@@ -17,7 +17,7 @@ from moviedb.moviedb import MovieDBClient
 # script version information
 version_major = 1
 version_minor = 4
-print("== %s (v%d.%d) ==\n" % (__file__, version_major, version_minor))
+print("\n== %s (v%d.%d) ==" % (__file__, version_major, version_minor))
 
 # configure arument options
 parser = argparse.ArgumentParser()
