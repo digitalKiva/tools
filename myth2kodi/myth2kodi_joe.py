@@ -16,7 +16,7 @@ from moviedb.moviedb import MovieDBClient
 
 # script version information
 version_major = 1
-version_minor = 4
+version_minor = 5
 print("\n== %s (v%d.%d) ==" % (__file__, version_major, version_minor))
 
 # configure arument options
