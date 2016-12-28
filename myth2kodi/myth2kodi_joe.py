@@ -447,10 +447,14 @@ def __process_recording(pool_dir, new_rec, mythtv_rec):
 			print " - Writing tvshow.nfo [" + nfo_file + "]"
 			__write_series_nfo(mythtv_rec, nfo_file)
 
-	# create movie/episode nfo file
-	nfo_file = os.path.splitext(link)[0] + '.nfo'
-	print " - Writing .nfo file [" + nfo_file.encode('ascii', 'replace') + "]"
-	__write_nfo(mythtv_rec, nfo_file)
+	# create movie/episode nfo file (only for movies and special episodes)
+	#  let kodi get the real episode information itself (from title, season and episode #)
+	if mythtv_rec.is_movie() or mythtv_rec.is_special():
+		nfo_file = os.path.splitext(link)[0] + '.nfo'
+		print " - Writing .nfo file [" + nfo_file.encode('ascii', 'replace') + "]"
+		__write_nfo(mythtv_rec, nfo_file)
+	else:
+		print " - Skipping writing .nfo file for real episode"
 
 	# ensure this recording special episode number is recorded
 	if mythtv_rec.is_special():
