@@ -85,3 +85,17 @@ class TVDBClient(object):
 		else:
 			print "search_seres failure (%d) | search[%s] | name[%s]" % (search_resp.status_code, search, name)
 			return
+
+	def get_series_episode(self, series_id, aired_season, aired_episode):
+
+		query_string = 'airedSeason=%s&airedEpisode=%s' % (aired_season, aired_episode)
+
+		search_url = self.API_BASE_URL + '/series/%s/episodes/query?%s' % (series_id, query_string)
+		search_resp = requests.get(url=search_url, headers=self.__get_header_auth())
+
+		if search_resp.status_code == 200:
+			# print "get_series_episodes success"
+			return json.loads(search_resp.content)
+		else:
+			print "get_series_episodes failure (%d) | search[%s]" % (search_resp.status_code, search_url)
+			return
