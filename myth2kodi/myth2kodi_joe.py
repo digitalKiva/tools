@@ -84,11 +84,11 @@ class Recording(object):
 
 	# returns just the number of hte inetref (9999 from tvdb.py_9999)
 	def inetref_int(self):
-		val = self.inetref_split()[2]
-		if isinstance(val, int):
-			return int(self.inetref_split()[2])
-		else:
-			return None
+		try:
+			ret = int(self.inetref_split()[2])
+		except ValueError:
+			ret = None
+		return ret
 
 	def is_special(self):
 		return self.special
