@@ -87,7 +87,6 @@ class TVDBClient(object):
 			return
 
 	def get_series_episode(self, series_id, aired_season, aired_episode):
-
 		query_string = 'airedSeason=%s&airedEpisode=%s' % (aired_season, aired_episode)
 
 		search_url = self.API_BASE_URL + '/series/%s/episodes/query?%s' % (series_id, query_string)
@@ -97,5 +96,15 @@ class TVDBClient(object):
 			# print "get_series_episodes success"
 			return json.loads(search_resp.content)
 		else:
-			print "get_series_episodes failure (%d) | search[%s]" % (search_resp.status_code, search_url)
+			print "get_series_episode failure (%d) | search[%s]" % (search_resp.status_code, search_url)
+			return
+
+	def get_series_episodes(self, series_id, page=1):
+		search_url = self.API_BASE_URL + '/series/%s/episodes?page=%d' % (series_id, page)
+		search_resp = requests.get(url=search_url, headers=self.__get_header_auth())
+
+		if search_resp.status_code == 200:
+			return json.loads(search_resp.content)
+		else:
+			# print "get_series_episodes failure (%d) | search[%s]" % (search_resp.status_code, search_url)
 			return
