@@ -16,7 +16,7 @@ from moviedb.moviedb import MovieDBClient
 
 # script version information
 version_major = 1
-version_minor = 5
+version_minor = 6
 print("\n== %s (v%d.%d) ==" % (__file__, version_major, version_minor))
 
 # configure arument options
@@ -61,7 +61,7 @@ class Recording(object):
 		self.inetref = unicode(self.recordingXML.find('Inetref').text)
 		self.seriesid = unicode(self.recordingXML.find('SeriesId').text)
 		self.programid = unicode(self.recordingXML.find('ProgramId').text)
-		self.special = self.is_movie() == False and self.season.zfill(2) == "00" and self.episode.zfill(2) == "00"
+		self.reset_special()
 		return
 
 	def printy(self):
@@ -83,12 +83,16 @@ class Recording(object):
 		return self.inetref.rpartition("_")
 
 	# returns just the number of hte inetref (9999 from tvdb.py_9999)
-	def inetref_int(self):
+	def inetref_num(self):
 		try:
 			ret = int(self.inetref_split()[2])
 		except ValueError:
 			ret = None
 		return ret
+
+	def reset_special(self):
+		self.special = self.is_movie() == False and self.season.zfill(2) == "00" and self.episode.zfill(2) == "00"
+		return
 
 	def is_special(self):
 		return self.special
@@ -388,14 +392,54 @@ def __validate_inetref(json_results, mythtv_rec):
 	else:
 		# we successfully filterd down to a single result
 		online_inet = title_filter[0][id_key[key_index]]
-		mythtv_inet = mythtv_rec.inetref_int()
+		mythtv_inet = mythtv_rec.inetref_num()
 		if online_inet == mythtv_inet:
 			# TODO: log that we have validated our inetref
-			print "Validated inetref online (%d) matches recording (%d)" % (online_inet, mythtv_inet)
+			print " - Validated inetref online (%d) matches recording (%d)" % (online_inet, mythtv_inet)
 		else:
 			# TODO: replace our inetref with online one
 			print " - Replacing recording inetref (" + str(mythtv_inet) + ") with online (" + str(online_inet) + ")"
 			mythtv_rec.inetref = unicode(online_inet)
+
+	return mythtv_rec
+
+def __validate_episode_info(mythtv_rec):
+	found = False
+	keep_searching = True
+	page = 1
+	mythtv_episode = re.sub('[^0-9a-zA-Z]+', '', mythtv_rec.subtitle)
+	# print "Searching for episode (%s) in series (%s)[%s]" % (mythtv_rec.subtitle, mythtv_rec.title, mythtv_rec.inetref)
+	while keep_searching:
+		search_resp = __tvdbclient__.get_series_episodes(mythtv_rec.inetref_num(), page)
+		if search_resp != None:
+			#print json.dumps(search_resp, indent=True)
+			# look for our recording in the results
+			for item in search_resp["data"]:
+				try:
+					json_episode = re.sub('[^0-9a-zA-Z]+', '', item["episodeName"])
+				except:
+					json_episode = ""
+				# print "%s vs %s" % (json_episode.lower(), mythtv_episode.lower())
+				if json_episode.lower() == mythtv_episode.lower():
+					found = True
+					json_season = unicode(item["airedSeason"])
+					json_episode = unicode(item["airedEpisodeNumber"])
+					if json_season != mythtv_rec.season or json_episode != mythtv_rec.episode:
+						print " - Replacing recording episode info (%s.%s) with online (%s.%s)" % (mythtv_rec.season, mythtv_rec.episode, json_season, json_episode)
+						mythtv_rec.season = unicode(json_season)
+						mythtv_rec.episode = unicode(json_episode)
+						mythtv_rec.reset_special()
+					else:
+						print " - Validated online season/episode matches recording (%s.%s)" % (mythtv_rec.season, mythtv_rec.episode)
+					keep_searching = False
+					break
+			page = page + 1
+		else:
+			# we have failed or reach the end
+			keep_searching = False
+
+	if not found:
+		print " - WARNING: episode (%s) not found in series (%s)[%s] on tvdb" % (mythtv_rec.subtitle, mythtv_rec.title, mythtv_rec.inetref)
 
 	return mythtv_rec
 
@@ -422,6 +466,10 @@ def __process_recording(pool_dir, new_rec, mythtv_rec):
 		mythtv_rec = __validate_inetref(search_resp, mythtv_rec)
 	else:
 		print " - WARNING: %s search results failed" % debug_print
+
+	# ensure the episode information is correct
+	if not mythtv_rec.is_movie():
+		mythtv_rec = __validate_episode_info(mythtv_rec)
 
 	# create symlink directory
 	link = __kodi_full_path(pool_dir, mythtv_rec)
