@@ -16,7 +16,7 @@ from moviedb.moviedb import MovieDBClient
 
 # script version information
 version_major = 1
-version_minor = 6
+version_minor = 7
 print("\n== %s (v%d.%d) ==" % (__file__, version_major, version_minor))
 
 # configure arument options
@@ -61,7 +61,6 @@ class Recording(object):
 		self.inetref = unicode(self.recordingXML.find('Inetref').text)
 		self.seriesid = unicode(self.recordingXML.find('SeriesId').text)
 		self.programid = unicode(self.recordingXML.find('ProgramId').text)
-		self.reset_special()
 		return
 
 	def printy(self):
@@ -90,12 +89,8 @@ class Recording(object):
 			ret = None
 		return ret
 
-	def reset_special(self):
-		self.special = self.is_movie() == False and self.season.zfill(2) == "00" and self.episode.zfill(2) == "00"
-		return
-
 	def is_special(self):
-		return self.special
+		return self.is_movie() == False and self.season.zfill(2) == "00"
 
 	def is_movie(self):
 		res = False
@@ -428,7 +423,6 @@ def __validate_episode_info(mythtv_rec):
 						print " - Replacing recording episode info (%s.%s) with online (%s.%s)" % (mythtv_rec.season, mythtv_rec.episode, json_season, json_episode)
 						mythtv_rec.season = unicode(json_season)
 						mythtv_rec.episode = unicode(json_episode)
-						mythtv_rec.reset_special()
 					else:
 						print " - Validated online season/episode matches recording (%s.%s)" % (mythtv_rec.season, mythtv_rec.episode)
 					keep_searching = False
@@ -474,9 +468,9 @@ def __process_recording(pool_dir, new_rec, mythtv_rec):
 	# create symlink directory
 	link = __kodi_full_path(pool_dir, mythtv_rec)
 
-	# if this is a special epsiode we need to lookup the next episode number based on the above
-	# path and refresh the path
-	if mythtv_rec.is_special():
+	# if this is a special epsiode and it does not have a episode number
+	#  we need to lookup the next episode number based on the above path and refresh the path
+	if mythtv_rec.is_special() and mythtv_rec.episode.zfill(2) == "00":
 		(found, s_episode) = __get_special_episode(os.path.dirname(link), mythtv_rec)
 		mythtv_rec.episode = unicode(str(s_episode))
 		link = __kodi_full_path(pool_dir, mythtv_rec)
