@@ -1,6 +1,6 @@
 #! /usr/bin/env python
 
-import os, sys
+import time, os, sys
 import xml.etree.cElementTree as ET
 from lxml import etree as ET2
 import xml.dom.minidom as dom
@@ -16,7 +16,7 @@ from moviedb.moviedb import MovieDBClient
 
 # script version information
 version_major = 1
-version_minor = 7
+version_minor = 8
 print("\n== %s (v%d.%d) ==" % (__file__, version_major, version_minor))
 
 # configure arument options
@@ -26,6 +26,8 @@ parser.add_argument("-d", "--dest", dest="pool_dir", help="Location for the link
 parser.add_argument("-p", "--port", dest="mythtv_port", help="Port for the mythtv backend database", default="6544")
 parser.add_argument("-a", "--add", dest="new_rec", help="Path to new mythtv recording to be processed")
 parser.add_argument("-s", "--scan", dest="scan_rec", help="mythtv recording directory to process all files");
+parser.add_argument("-r", "--retries", dest="retry_count", help="Number of times to scan the mythtv DB", default=3)
+parser.add_argument("-w", "--wait", dest="scan_wait", help="Number of seconds to wait between mythtv DB scans", default=180)
 args = parser.parse_args()
 
 # sanity check some of the config options
@@ -521,7 +523,7 @@ def __process_recording(pool_dir, new_rec, mythtv_rec):
 ##
 # Takes as input either a file or directory.  If it is a file then add the single file
 # otherwise if it is a directory scan the directory for all video files
-def scan_recording(mythtv_url, new_files):
+def scan_recording(mythtv_url, new_files, retry_count, retry_wait):
 	file_list = []
 
 	print "Processing [" + new_files + "]..."
@@ -542,29 +544,33 @@ def scan_recording(mythtv_url, new_files):
 		print "Error: [" + new_files + "] not a directory or file"
 		return
 
-	recording_list = __get_recording_list(mythtv_url)
+	for i in range(retry_count):
+		recording_list = __get_recording_list(mythtv_url)
 
-	# loop over each recording to be processed, finding it's entry in the mythtvDB
-	for new_rec in file_list:
-		found = False
-		for mythtv_entry in recording_list.iter('Program'):
-			mythtv_rec = Recording(mythtv_entry)
-			# only all default recording group (no "live tv" or "deleted")
-			if not mythtv_rec.recgroup == 'Default':
-				continue
-			if __base_filename(new_rec) == __base_filename(mythtv_rec.filename):
-				print "Found new recording [" + __base_filename(new_rec) + "] in mythtv DB"
-				#mythtv_rec.printy()
-				__process_recording(args.pool_dir, new_rec, mythtv_rec)
-				found = True
-				continue
-		if not found:
-			print " - Recording [" + __base_filename(new_rec) + "] not found in mythtv DB!"
+		# loop over each recording to be processed, finding it's entry in the mythtvDB
+		for new_rec in file_list:
+			found = False
+			for mythtv_entry in recording_list.iter('Program'):
+				mythtv_rec = Recording(mythtv_entry)
+				# only all default recording group (no "live tv" or "deleted")
+				if not mythtv_rec.recgroup == 'Default':
+					continue
+				if __base_filename(new_rec) == __base_filename(mythtv_rec.filename):
+					print "Found new recording [" + __base_filename(new_rec) + "] in mythtv DB"
+					#mythtv_rec.printy()
+					__process_recording(args.pool_dir, new_rec, mythtv_rec)
+					found = True
+					file_list.remove(new_rec)
+					continue
+			if not found:
+				print " - Recording [{0}] not found in mythtv DB! (retries: {1})".format(__base_filename(new_rec), i)
+		# new recording list is empty, no need to re-scan
+		if not file_list:
+			break;
+		elif i != retry_count - 1:
+			print " - Re-scan wait %d seconds" % retry_wait
+			time.sleep(retry_wait)
 
-		# ttvdb_key = "A3F61578CF5DDBF3": (try below without en.zip too)
-			# (example: http://www.thetvdb.com/api/A3F61578CF5DDBF3/series/276812/all/en.zip)
-		# tmdb_key = "8c65f4f3b0d3c59203ca6b62039426b1"
-		# for wall-e: https://api.themoviedb.org/3/movie/10681?api_key=8c65f4f3b0d3c59203ca6b62039426b1
 	return
 
 def main():
@@ -584,9 +590,9 @@ def main():
 	mythtv_url = "http://" + args.mythtv_url + ":" + args.mythtv_port
 
 	if args.scan_rec:
-		scan_recording(mythtv_url, args.scan_rec)
+		scan_recording(mythtv_url, args.scan_rec, int(args.retry_count), int(args.scan_wait))
 	elif args.new_rec:
-		scan_recording(mythtv_url, args.new_rec)
+		scan_recording(mythtv_url, args.new_rec, int(args.retry_count), int(args.scan_wait))
 	sys.exit(0)
 
 main()
