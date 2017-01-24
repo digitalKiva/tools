@@ -16,7 +16,7 @@ from moviedb.moviedb import MovieDBClient
 
 # script version information
 version_major = 1
-version_minor = 8
+version_minor = 9
 print("\n== %s (v%d.%d) ==" % (__file__, version_major, version_minor))
 
 # configure arument options
@@ -275,6 +275,9 @@ def __print_pretty_xml(xml_element):
 	reparsed = dom.parseString(rough_string)
 	return reparsed.toprettyxml(indent="\t")
 
+def __safe_encode(text):
+	return text.encode('ascii', 'replace')
+
 ##
 # Return the file name of a full path
 # Return "file" w/ path = "/var/lib/file.ts"
@@ -401,12 +404,12 @@ def __validate_inetref(json_results, mythtv_rec):
 	return mythtv_rec
 
 def __validate_episode_info(mythtv_rec):
-	found = False
-	keep_searching = True
+	more_episodes = True
 	page = 1
 	mythtv_episode = re.sub('[^0-9a-zA-Z]+', '', mythtv_rec.subtitle)
 	# print "Searching for episode (%s) in series (%s)[%s]" % (mythtv_rec.subtitle, mythtv_rec.title, mythtv_rec.inetref)
-	while keep_searching:
+	matches = []
+	while more_episodes:
 		search_resp = __tvdbclient__.get_series_episodes(mythtv_rec.inetref_num(), page)
 		if search_resp != None:
 			#print json.dumps(search_resp, indent=True)
@@ -418,24 +421,44 @@ def __validate_episode_info(mythtv_rec):
 					json_episode = ""
 				# print "%s vs %s" % (json_episode.lower(), mythtv_episode.lower())
 				if json_episode.lower() == mythtv_episode.lower():
-					found = True
-					json_season = unicode(item["airedSeason"])
-					json_episode = unicode(item["airedEpisodeNumber"])
-					if json_season != mythtv_rec.season or json_episode != mythtv_rec.episode:
-						print " - Replacing recording episode info (%s.%s) with online (%s.%s)" % (mythtv_rec.season, mythtv_rec.episode, json_season, json_episode)
-						mythtv_rec.season = unicode(json_season)
-						mythtv_rec.episode = unicode(json_episode)
-					else:
-						print " - Validated online season/episode matches recording (%s.%s)" % (mythtv_rec.season, mythtv_rec.episode)
-					keep_searching = False
-					break
+					matches.append({'airedSeason': unicode(item["airedSeason"]), \
+									'airedEpisodeNumber': unicode(item["airedEpisodeNumber"])})
 			page = page + 1
 		else:
 			# we have failed or reach the end
-			keep_searching = False
+			more_episodes = False
 
-	if not found:
-		print " - WARNING: episode (%s) not found in series (%s)[%s] on tvdb" % (mythtv_rec.subtitle, mythtv_rec.title, mythtv_rec.inetref)
+	# now loop through all episodes that have matching names, find the best match
+	best_se_hash = 0
+	use_best = True
+	for match in matches:
+		if match['airedSeason'] == mythtv_rec.season:
+			use_best = False
+			if match['airedEpisodeNumber'] == mythtv_rec.episode:
+				print " - Validated online season/episode matches recording (%s.%s)" \
+						% (mythtv_rec.season, mythtv_rec.episode)
+				break;
+			else:
+				print " - Replacing recording episode info (episode only) (%s.%s) with online (%s.%s)" \
+						% (mythtv_rec.season, mythtv_rec.episode, match['airedSeason'], match['airedEpisodeNumber'])
+				mythtv_rec.episode = match['airedEpisodeNumber']
+				break;
+		else:
+			# keep track of the highest season / episode
+			temp_se_hash = 1000 * int(match['airedSeason']) + int(match['airedEpisodeNumber'])
+			if temp_se_hash > best_se_hash:
+				best_se_hash = temp_se_hash
+
+	if not matches:
+		print " - WARNING: episode (%s) not found in series (%s)[%s] on tvdb" \
+				% (mythtv_rec.subtitle, mythtv_rec.title, mythtv_rec.inetref)
+	elif use_best:
+		season = int(best_se_hash / 1000)
+		episode = best_se_hash - (season * 1000)
+		print " - Replacing recording episode info (%s.%s) with online (%s.%s)" \
+				% (mythtv_rec.season, mythtv_rec.episode, season, episode)
+		mythtv_rec.season = unicode(season)
+		mythtv_rec.episode = unicode(episode)
 
 	return mythtv_rec
 
@@ -445,7 +468,8 @@ def __validate_episode_info(mythtv_rec):
 # for movies create the .nfo file from
 #  Based on this: http://kodi.wiki/view/NFO_files/movies#Movie_tags
 def __process_recording(pool_dir, new_rec, mythtv_rec):
-	print " - Processing [" + new_rec + "]"
+	print " - Processing [{0}] | {1} ({2})".format(new_rec, __safe_encode(mythtv_rec.title), \
+															__safe_encode(mythtv_rec.subtitle))
 
 	# look up the information online
 	search_resp = None
@@ -481,7 +505,7 @@ def __process_recording(pool_dir, new_rec, mythtv_rec):
 	if not os.path.exists(os.path.dirname(link)):
 		os.makedirs(os.path.dirname(link))
 	if not os.path.exists(link) and not os.path.islink(link):
-		print " - Linking [" + new_rec + "] => [" + link.encode('ascii', 'replace') + "]"
+		print " - Linking [" + new_rec + "] => [" + __safe_encode(link) + "]"
 		os.symlink(new_rec, link)
 
 	# only write the series nfo for non-movies
@@ -495,7 +519,7 @@ def __process_recording(pool_dir, new_rec, mythtv_rec):
 	#  let kodi get the real episode information itself (from title, season and episode #)
 	if mythtv_rec.is_movie() or mythtv_rec.is_special():
 		nfo_file = os.path.splitext(link)[0] + '.nfo'
-		print " - Writing .nfo file [" + nfo_file.encode('ascii', 'replace') + "]"
+		print " - Writing .nfo file [" + __safe_encode(nfo_file) + "]"
 		__write_nfo(mythtv_rec, nfo_file)
 	else:
 		print " - Skipping writing .nfo file for real episode"
@@ -556,6 +580,7 @@ def scan_recording(mythtv_url, new_files, retry_count, retry_wait):
 				if not mythtv_rec.recgroup == 'Default':
 					continue
 				if __base_filename(new_rec) == __base_filename(mythtv_rec.filename):
+					print "-------------------"
 					print "Found new recording [" + __base_filename(new_rec) + "] in mythtv DB"
 					#mythtv_rec.printy()
 					__process_recording(args.pool_dir, new_rec, mythtv_rec)
