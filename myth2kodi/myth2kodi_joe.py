@@ -572,7 +572,8 @@ def scan_recording(mythtv_url, new_files, retry_count, retry_wait):
 		recording_list = __get_recording_list(mythtv_url)
 
 		# loop over each recording to be processed, finding it's entry in the mythtvDB
-		for new_rec in file_list:
+		# - list(file_list) to iterate over a copy, to allow in-loop removal
+		for new_rec in list(file_list):
 			found = False
 			for mythtv_entry in recording_list.iter('Program'):
 				mythtv_rec = Recording(mythtv_entry)
