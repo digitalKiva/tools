@@ -529,18 +529,21 @@ def __process_recording(pool_dir, new_rec, mythtv_rec):
 		__update_special_episode(os.path.dirname(link), mythtv_rec)
 		# print "link (updated): " + link
 
-	# ensure proper permissions
-	print " - Validating permissions: " + __kodi_category_path(pool_dir, mythtv_rec)
-	print " - Validating permissions: " + __kodi_show_path(pool_dir, mythtv_rec)
-	os.chmod(__kodi_category_path(pool_dir, mythtv_rec), 0775)
-	os.chmod(__kodi_show_path(pool_dir, mythtv_rec), 0775)
-	for root, dirs, files in os.walk(__kodi_show_path(pool_dir, mythtv_rec)):
-		for name in files:
-			# print(os.path.join(root, name))
-			os.chmod(os.path.join(root, name), 0775)
-		for name in dirs:
-			# print(os.path.join(root, name))
-			os.chmod(os.path.join(root, name), 0775)
+	try:
+		# ensure proper permissions
+		print " - Validating permissions: " + __kodi_category_path(pool_dir, mythtv_rec)
+		print " - Validating permissions: " + __kodi_show_path(pool_dir, mythtv_rec)
+		os.chmod(__kodi_category_path(pool_dir, mythtv_rec), 0775)
+		os.chmod(__kodi_show_path(pool_dir, mythtv_rec), 0775)
+		for root, dirs, files in os.walk(__kodi_show_path(pool_dir, mythtv_rec)):
+			for name in files:
+				# print(os.path.join(root, name))
+				os.chmod(os.path.join(root, name), 0775)
+			for name in dirs:
+				# print(os.path.join(root, name))
+				os.chmod(os.path.join(root, name), 0775)
+	except:
+		print " - WARNING: exception during permissions validation: ", sys.exc_info()
 
 	return
 
