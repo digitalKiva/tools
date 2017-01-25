@@ -29,6 +29,7 @@ parser.add_argument("-a", "--add", dest="new_rec", help="Path to new mythtv reco
 parser.add_argument("-s", "--scan", dest="scan_rec", help="mythtv recording directory to process all files");
 parser.add_argument("-r", "--retries", dest="retry_count", help="Number of times to scan the mythtv DB", default=3)
 parser.add_argument("-w", "--wait", dest="scan_wait", help="Number of seconds to wait between mythtv DB scans", default=180)
+parser.add_argument("-f", "--filename", dest="use_filename", help="For non season/episode based shows, use filename instead of programid", action='store_true')
 args = parser.parse_args()
 
 # sanity check some of the config options
@@ -115,13 +116,16 @@ def __get_special_episode(path, recording):
 	episode = 0
 	file = path + "/.specialinfo"
 	found = False
+	key = recording.programid
+	if args.use_filename:
+		key = recording.filename
 	# look for episode in the file
 	if os.path.isfile(file):
 		with open(file) as f:
 			for line in f:
 				special = line.strip().split('|')
 				episode = special[1]
-				if special[0] == recording.programid:
+				if special[0] == key:
 					found = True
 					break
 
@@ -129,7 +133,7 @@ def __get_special_episode(path, recording):
 	if not found:
 		episode = episode + 1
 
-	print " - Special episode info (found:"+str(found)+") ["+recording.programid+" | ep: "+str(episode)+"]"
+	print " - Special episode info (found:"+str(found)+") ["+key+" | ep: "+str(episode)+"]"
 
 	return (found, episode)
 
@@ -143,11 +147,15 @@ def __get_year(date):
 def __update_special_episode(path, recording):
 	file = path + "/.specialinfo"
 
+	key = recording.programid
+	if args.use_filename:
+		key = recording.filename
+
 	(found, episode) = __get_special_episode(path, recording)
 	if not found:
-		print " - Add special episode info [%s | ep: %s]" % (recording.programid, recording.episode)
+		print " - Add special episode info [%s | ep: %s]" % (key, recording.episode)
 		with open(file, 'a+') as f:
-			f.write("%s|%s\n" % (recording.programid, recording.episode))
+			f.write("%s|%s\n" % (key, recording.episode))
 
 ##
 # Write the shows series info into nfo_file
