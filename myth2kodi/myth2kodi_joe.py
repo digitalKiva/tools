@@ -51,7 +51,10 @@ __moviedbclient__ = None
 class Recording(object):
 	def __init__(self, recordingXML):
 		self.recordingXML = recordingXML
-		self.filename = self.recordingXML.find('Recording/FileName').text
+		if self.recordingXML.find('Recording/FileName') is not None:
+			self.filename = self.recordingXML.find('Recording/FileName').text
+		else:
+			self.filename = self.recordingXML.find('FileName').text
 		self.recgroup = self.recordingXML.find('Recording/RecGroup').text
 		self.title = unicode(self.recordingXML.find('Title').text)
 		self.subtitle = unicode(self.recordingXML.find('SubTitle').text)
