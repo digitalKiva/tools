@@ -580,16 +580,16 @@ def scan_recording(mythtv_url, new_files, retry_count, retry_wait):
 			found = False
 			for mythtv_entry in recording_list.iter('Program'):
 				mythtv_rec = Recording(mythtv_entry)
-				# only all default recording group (no "live tv" or "deleted")
-				if not mythtv_rec.recgroup == 'Default':
-					continue
 				if __base_filename(new_rec) == __base_filename(mythtv_rec.filename):
-					print "-------------------"
-					print "Found new recording [" + __base_filename(new_rec) + "] in mythtv DB"
-					#mythtv_rec.printy()
-					__process_recording(args.pool_dir, new_rec, mythtv_rec)
-					found = True
+					if mythtv_rec.recgroup == 'Default':
+						print "-------------------"
+						print "Found new recording [{0}] in mythtv DB".format(__base_filename(new_rec))
+						#mythtv_rec.printy()
+						__process_recording(args.pool_dir, new_rec, mythtv_rec)
+					else:
+						print "Skipping recording [{0}], in {1} group".format(__base_filename(new_rec), mythtv_rec.recgroup)
 					file_list.remove(new_rec)
+					found = True
 					continue
 			if not found:
 				print " - Recording [{0}] not found in mythtv DB! (retries: {1})".format(__base_filename(new_rec), i)
