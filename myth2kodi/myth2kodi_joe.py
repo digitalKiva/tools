@@ -10,6 +10,7 @@ import re
 import argparse
 import requests
 import json
+import subprocess
 #from tvdb_client.clients.ApiV2Client import ApiV2Client
 from tvdbclient.tvdbclient import TVDBClient
 from moviedb.moviedb import MovieDBClient
@@ -529,6 +530,7 @@ def __process_recording(pool_dir, new_rec, mythtv_rec):
 		__update_special_episode(os.path.dirname(link), mythtv_rec)
 		# print "link (updated): " + link
 
+	deadlinks = []
 	try:
 		# ensure proper permissions
 		print " - Validating permissions: " + __kodi_category_path(pool_dir, mythtv_rec)
@@ -537,13 +539,25 @@ def __process_recording(pool_dir, new_rec, mythtv_rec):
 		os.chmod(__kodi_show_path(pool_dir, mythtv_rec), 0775)
 		for root, dirs, files in os.walk(__kodi_show_path(pool_dir, mythtv_rec)):
 			for name in files:
-				# print(os.path.join(root, name))
-				os.chmod(os.path.join(root, name), 0775)
+				if os.path.islink(os.path.join(root, name)) and not os.path.isfile(os.path.join(root, name)):
+					deadlinks.append(os.path.join(root, name))
+				else:
+					# print(os.path.join(root, name))
+					os.chmod(os.path.join(root, name), 0775)
 			for name in dirs:
 				# print(os.path.join(root, name))
 				os.chmod(os.path.join(root, name), 0775)
 	except:
 		print " - WARNING: exception during permissions validation: ", sys.exc_info()
+
+	print " - Removing dead links: " + __kodi_show_path(pool_dir, mythtv_rec)
+	for link in deadlinks:
+		cmd = [ 'rm', os.path.splitext(link)[0]+'.nfo' ]
+		print '    - '+' '.join(cmd)
+		subprocess.call(cmd)
+		cmd = [ 'rm', link ]
+		print '    - '+' '.join(cmd)
+		subprocess.call(cmd)
 
 	return
 
